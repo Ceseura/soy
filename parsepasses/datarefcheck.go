@@ -31,10 +31,14 @@ func CheckDataRefs(reg template.Registry) (err error) {
 		tc.checkTemplate(t.Node)
 
 		// check that all params appear in the usedKeys
+		unusedParamNames := make([]string, 0)
 		for _, param := range tc.params {
 			if !contains(tc.usedKeys, param) {
-				panic(fmt.Errorf("param %q is unused", param))
+				unusedParamNames = append(unusedParamNames, param)
 			}
+		}
+		if len(unusedParamNames) > 0 {
+			panic(fmt.Errorf("params %q are unused", unusedParamNames))
 		}
 	}
 	return nil
@@ -126,21 +130,29 @@ func (tc *templateChecker) checkCall(node *ast.CallNode) {
 
 	// reconcile the two param lists.
 	// check: all {call} params are declared as @params in the called template soydoc.
+	undeclaredCallParamNames := make([]string, 0)
 	for _, callParamName := range callerParamNames {
 		if !contains(allCalleeParamNames, callParamName) {
-			panic(fmt.Errorf("Param %q is not declared by the callee.", callParamName))
+			undeclaredCallParamNames = append(undeclaredCallParamNames, callParamName)
 		}
+	}
+	if len(undeclaredCallParamNames) > 0 {
+		panic(fmt.Errorf("Params %q are not declared by the callee.", undeclaredCallParamNames))
 	}
 
 	// check: a {call}'ed template is passed all required @params, or a data="$var"
 	if node.Data != nil {
 		return
 	}
+	missingRequiredParamNames := make([]string, 0)
 	for _, requiredCalleeParam := range requiredCalleeParamNames {
 		if !contains(callerParamNames, requiredCalleeParam) {
-			panic(fmt.Errorf("Required param %q is not passed by the call: %v",
-				requiredCalleeParam, node))
+			missingRequiredParamNames = append(missingRequiredParamNames, requiredCalleeParam)
 		}
+	}
+	if len(missingRequiredParamNames) > 0 {
+		panic(fmt.Errorf("Required params %q are not passed by the call: %v",
+			missingRequiredParamNames, node))
 	}
 }
 
@@ -171,10 +183,14 @@ func (tc *templateChecker) recurse(parent ast.ParentNode) {
 	}
 
 	// check that any let variables leaving scope have been used
+	unusedLetVarNames := make([]string, 0)
 	for _, letVar := range letVarsGoingOutOfScope {
 		if !contains(usedLets, letVar) {
-			panic(fmt.Errorf("{let} variable %q is not used.", letVar))
+			unusedLetVarNames = append(unusedLetVarNames, letVar)
 		}
+	}
+	if len(unusedLetVarNames) > 0 {
+		panic(fmt.Errorf("{let} variables %q are not used.", unusedLetVarNames))
 	}
 
 	tc.usedKeys = append(tc.usedKeys[:initialUsedKeys], usedKeysToKeep...)
